@@ -25,7 +25,8 @@ debug_1.default.formatters.C = function callOptionsFormatter(options) {
  * debug message logger
  * @hidden
  */
-var debug = debug_1.default("sajari:api");
+// tslint:disable-next-line: no-console
+var debug = console.log; // debuglog("sajari:api");
 /**
  * The default API endpoint
  * @hidden
@@ -55,6 +56,8 @@ var propagate = {
     CANCELLATION: 8,
     DEFAULTS: 65535
 };
+// tslint:disable-next-line: no-console
+console.log('grcp =', grpc_js_1.default);
 /**
  * APIClient wraps the grpc client, providing a single call method for
  * creating an unary request.

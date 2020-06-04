@@ -1,4 +1,4 @@
-import grpc from "@grpc/grpc-js";
+import * as grpc from "@grpc/grpc-js";
 import debuglog from "debug";
 import merge from "deepmerge";
 import protobuf from "protobufjs/light";
@@ -26,7 +26,8 @@ debuglog.formatters.C = function callOptionsFormatter(
  * debug message logger
  * @hidden
  */
-const debug = debuglog("sajari:api");
+// tslint:disable-next-line: no-console
+const debug = console.log; // debuglog("sajari:api");
 
 /**
  * The default API endpoint
@@ -79,6 +80,9 @@ const propagate = {
   CANCELLATION: 8,
   DEFAULTS: 65535
 };
+
+// tslint:disable-next-line: no-console
+console.log('grcp =', grpc);
 
 /**
  * APIClient wraps the grpc client, providing a single call method for

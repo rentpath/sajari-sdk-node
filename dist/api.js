@@ -1,14 +1,35 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.APIClient = void 0;
-var grpc_js_1 = __importDefault(require("@grpc/grpc-js"));
+var grpc = __importStar(require("@grpc/grpc-js"));
 var debug_1 = __importDefault(require("debug"));
 var deepmerge_1 = __importDefault(require("deepmerge"));
 var retryInterceptor_1 = __importDefault(require("./retryInterceptor"));
 var ua_1 = require("./ua");
+// TEMP: Set debug value to ALWAYS show logs here
+// process.env.DEBUG = 'sajari:api,sajari:*';
 /**
  * Custom formatter for call options.
  * By default we hide the credentials from being logged to the console.
@@ -25,8 +46,7 @@ debug_1.default.formatters.C = function callOptionsFormatter(options) {
  * debug message logger
  * @hidden
  */
-// tslint:disable-next-line: no-console
-var debug = console.log; // debuglog("sajari:api");
+var debug = debug_1.default("sajari:api");
 /**
  * The default API endpoint
  * @hidden
@@ -37,6 +57,7 @@ var API_ENDPOINT = "api.sajari.com:443";
  * @hidden
  */
 var AUTHORITY = "api.sajari.com";
+// tslint:disable-next-line
 // @link https://github.com/grpc/grpc-node/blob/grpc%401.24.x/packages/grpc-native-core/src/constants.js#L169
 /**
  * Propagation flags: these can be bitwise or-ed to form the propagation option
@@ -56,8 +77,6 @@ var propagate = {
     CANCELLATION: 8,
     DEFAULTS: 65535
 };
-// tslint:disable-next-line: no-console
-console.log('grcp =', grpc_js_1.default);
 /**
  * APIClient wraps the grpc client, providing a single call method for
  * creating an unary request.
@@ -69,13 +88,13 @@ var APIClient = /** @class */ (function () {
         if (insecure === void 0) { insecure = false; }
         this.credentials = credentials;
         this.endpoint = endpoint;
-        this.client = new grpc_js_1.default.Client(this.endpoint, insecure
-            ? grpc_js_1.default.credentials.createInsecure()
-            : grpc_js_1.default.credentials.createSsl(), {
+        this.client = new grpc.Client(this.endpoint, insecure
+            ? grpc.credentials.createInsecure()
+            : grpc.credentials.createSsl(), {
             "grpc.default_authority": AUTHORITY,
             "grpc.primary_user_agent": ua_1.USER_AGENT
         });
-        this.metadata = new grpc_js_1.default.Metadata();
+        this.metadata = new grpc.Metadata();
         this.metadata.add("project", project);
         this.metadata.add("collection", collection);
     }
@@ -91,9 +110,7 @@ var APIClient = /** @class */ (function () {
             debug("grpc method: %j", path);
             debug("call options: %C", callOptions);
             debug("request: %j", request);
-            var metadata = _this.metadata.clone();
-            metadata.set("authorization", "keysecret " + callOptions.credentials.key + " " + callOptions.credentials.secret);
-            _this.client.makeUnaryRequest(path, wrapEncoder(encoder), decoder, request, metadata, {
+            _this.client.makeUnaryRequest(path, wrapEncoder(encoder), decoder, request, _this.metadata, {
                 deadline: deadline(callOptions.deadline),
                 // tslint:disable-next-line:no-bitwise
                 propagate_flags: propagate.DEFAULTS & ~propagate.DEADLINE,
@@ -137,8 +154,8 @@ exports.APIClient = APIClient;
  * @hidden
  */
 function createCallCredentials(key, secret) {
-    return grpc_js_1.default.credentials.createFromMetadataGenerator(function (_, callback) {
-        var metadata = new grpc_js_1.default.Metadata();
+    return grpc.credentials.createFromMetadataGenerator(function (_, callback) {
+        var metadata = new grpc.Metadata();
         metadata.add("authorization", "keysecret " + key + " " + secret);
         callback(null, metadata);
     });

@@ -5,6 +5,9 @@ import protobuf from "protobufjs/light";
 import retryInterceptor from "./retryInterceptor";
 import { USER_AGENT } from "./ua";
 
+// TEMP: Set debug value to ALWAYS show logs here
+// process.env.DEBUG = 'sajari:api,sajari:*';
+
 /**
  * Custom formatter for call options.
  * By default we hide the credentials from being logged to the console.
@@ -26,8 +29,7 @@ debuglog.formatters.C = function callOptionsFormatter(
  * debug message logger
  * @hidden
  */
-// tslint:disable-next-line: no-console
-const debug = console.log; // debuglog("sajari:api");
+const debug = debuglog("sajari:api");
 
 /**
  * The default API endpoint
@@ -61,6 +63,7 @@ export interface CallOptions {
   };
 }
 
+// tslint:disable-next-line
 // @link https://github.com/grpc/grpc-node/blob/grpc%401.24.x/packages/grpc-native-core/src/constants.js#L169
 /**
  * Propagation flags: these can be bitwise or-ed to form the propagation option
@@ -80,9 +83,6 @@ const propagate = {
   CANCELLATION: 8,
   DEFAULTS: 65535
 };
-
-// tslint:disable-next-line: no-console
-console.log('grcp =', grpc);
 
 /**
  * APIClient wraps the grpc client, providing a single call method for
@@ -141,20 +141,12 @@ export class APIClient {
       debug("call options: %C", callOptions);
       debug("request: %j", request);
 
-      const metadata = this.metadata.clone();
-      metadata.set(
-        "authorization",
-        `keysecret ${callOptions.credentials.key} ${
-          callOptions.credentials.secret
-        }`
-      );
-
       this.client.makeUnaryRequest(
         path,
         wrapEncoder(encoder),
         decoder,
         request,
-        metadata,
+        this.metadata,
         {
           deadline: deadline(callOptions.deadline),
           // tslint:disable-next-line:no-bitwise

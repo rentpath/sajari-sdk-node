@@ -1,4 +1,5 @@
 /// <reference types="node" />
+import grpc from "grpc";
 import protobuf from "protobufjs/light";
 /**
  * @hidden
@@ -25,6 +26,8 @@ export declare class APIClient {
     private client;
     private metadata;
     private credentials;
+    private emitter;
+    private insecure;
     constructor(project: string, collection: string, credentials: {
         key: string;
         secret: string;
@@ -36,4 +39,6 @@ export declare class APIClient {
      */
     wait(seconds: number): Promise<void>;
     close(): void;
+    reconnect(): grpc.Client;
+    private unbindEmitter;
 }

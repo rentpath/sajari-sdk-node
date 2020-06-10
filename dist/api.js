@@ -1,35 +1,14 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.APIClient = void 0;
-var grpc = __importStar(require("@grpc/grpc-js"));
 var debug_1 = __importDefault(require("debug"));
 var deepmerge_1 = __importDefault(require("deepmerge"));
+var grpc_1 = __importDefault(require("grpc"));
 var retryInterceptor_1 = __importDefault(require("./retryInterceptor"));
 var ua_1 = require("./ua");
-// TEMP: Set debug value to ALWAYS show logs here
-// process.env.DEBUG = 'sajari:api,sajari:*';
 /**
  * Custom formatter for call options.
  * By default we hide the credentials from being logged to the console.
@@ -57,26 +36,6 @@ var API_ENDPOINT = "api.sajari.com:443";
  * @hidden
  */
 var AUTHORITY = "api.sajari.com";
-// tslint:disable-next-line
-// @link https://github.com/grpc/grpc-node/blob/grpc%401.24.x/packages/grpc-native-core/src/constants.js#L169
-/**
- * Propagation flags: these can be bitwise or-ed to form the propagation option
- * for calls.
- *
- * Users are encouraged to write propagation masks as deltas from the default.
- * i.e. write `grpc.propagate.DEFAULTS & ~grpc.propagate.DEADLINE` to disable
- * deadline propagation.
- * @memberof grpc
- * @alias grpc.propagate
- * @enum {number}
- */
-var propagate = {
-    DEADLINE: 1,
-    CENSUS_STATS_CONTEXT: 2,
-    CENSUS_TRACING_CONTEXT: 4,
-    CANCELLATION: 8,
-    DEFAULTS: 65535
-};
 /**
  * APIClient wraps the grpc client, providing a single call method for
  * creating an unary request.
@@ -88,13 +47,9 @@ var APIClient = /** @class */ (function () {
         if (insecure === void 0) { insecure = false; }
         this.credentials = credentials;
         this.endpoint = endpoint;
-        this.client = new grpc.Client(this.endpoint, insecure
-            ? grpc.credentials.createInsecure()
-            : grpc.credentials.createSsl(), {
-            "grpc.default_authority": AUTHORITY,
-            "grpc.primary_user_agent": ua_1.USER_AGENT
-        });
-        this.metadata = new grpc.Metadata();
+        this.insecure = insecure;
+        this.client = this.reconnect();
+        this.metadata = new grpc_1.default.Metadata();
         this.metadata.add("project", project);
         this.metadata.add("collection", collection);
     }
@@ -110,21 +65,26 @@ var APIClient = /** @class */ (function () {
             debug("grpc method: %j", path);
             debug("call options: %C", callOptions);
             debug("request: %j", request);
-            _this.client.makeUnaryRequest(path, wrapEncoder(encoder), decoder, request, _this.metadata, {
+            var metadata = _this.metadata.clone();
+            metadata.set("authorization", "keysecret " + callOptions.credentials.key + " " + callOptions.credentials.secret);
+            _this.emitter = _this.client.makeUnaryRequest(path, wrapEncoder(encoder), decoder, request, metadata, {
                 deadline: deadline(callOptions.deadline),
                 // tslint:disable-next-line:no-bitwise
-                propagate_flags: propagate.DEFAULTS & ~propagate.DEADLINE,
+                propagate_flags: grpc_1.default.propagate.DEFAULTS & ~grpc_1.default.propagate.DEADLINE,
                 // NOTE(@bhinchley): credentials is required by the type CallOptions,
                 // but this appears to do nothing.
                 credentials: createCallCredentials(callOptions.credentials.key, callOptions.credentials.secret),
                 interceptors: [retryInterceptor_1.default(3)]
             }, function (err, value) {
                 if (err) {
+                    _this.reconnect();
                     return reject(err);
                 }
                 debug("response: %j", value);
                 return resolve(value);
             });
+            // Reconnect to gRPC server on unexpected disconnects...
+            _this.emitter.on('cancelled', _this.reconnect);
         });
     };
     /**
@@ -136,6 +96,7 @@ var APIClient = /** @class */ (function () {
         return new Promise(function (resolve, reject) {
             _this.client.waitForReady(deadline(seconds), function (err) {
                 if (err) {
+                    _this.reconnect();
                     return reject(err);
                 }
                 return resolve();
@@ -143,7 +104,27 @@ var APIClient = /** @class */ (function () {
         });
     };
     APIClient.prototype.close = function () {
-        this.client.close();
+        this.unbindEmitter();
+        if (this.client) {
+            this.client.close();
+        }
+    };
+    APIClient.prototype.reconnect = function () {
+        // Close any existing client before reconnecting if open
+        if (this.client) {
+            this.close();
+        }
+        return this.client = new grpc_1.default.Client(this.endpoint, this.insecure
+            ? grpc_1.default.credentials.createInsecure()
+            : grpc_1.default.credentials.createSsl(), {
+            "grpc.default_authority": AUTHORITY,
+            "grpc.primary_user_agent": ua_1.USER_AGENT
+        });
+    };
+    APIClient.prototype.unbindEmitter = function () {
+        if (this.emitter) {
+            this.emitter.off('cancelled', this.reconnect);
+        }
     };
     return APIClient;
 }());
@@ -154,8 +135,8 @@ exports.APIClient = APIClient;
  * @hidden
  */
 function createCallCredentials(key, secret) {
-    return grpc.credentials.createFromMetadataGenerator(function (_, callback) {
-        var metadata = new grpc.Metadata();
+    return grpc_1.default.credentials.createFromMetadataGenerator(function (_, callback) {
+        var metadata = new grpc_1.default.Metadata();
         metadata.add("authorization", "keysecret " + key + " " + secret);
         callback(null, metadata);
     });

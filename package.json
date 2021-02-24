@@ -1,6 +1,6 @@
 {
   "name": "@rentpath/sajari-sdk-node",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
@@ -33,7 +33,7 @@
     "prepublishOnly": "npm-run-all build"
   },
   "dependencies": {
-    "@grpc/grpc-js": "1.2.5",
+    "@grpc/grpc-js": "1.2.7",
     "debug": "^4.1.1",
     "deepmerge": "^4.0.0",
     "protobufjs": "^6.8.8"
